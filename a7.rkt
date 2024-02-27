@@ -1,5 +1,5 @@
 #lang racket
-(require racket/trace)
+(require rackunit)
 ;Problem 1
 (define last-non-zero
   (lambda (ls)
@@ -9,16 +9,16 @@
             (lambda (ls)
               (cond
                 ((null? ls) '())
-                ((eqv? 0 (car ls)) (k (cdr ls)))
+                ((eqv? 0 (car ls)) (k (last-non-zero(cdr ls))))
                 (else (cons (car ls) (last-non-zero (cdr ls))))))))
-        (k (last-non-zero ls))))))
+        (last-non-zero ls)))))
 
-
-
+#|
 (last-non-zero '(0))
 (last-non-zero '(1 2 3 0 4 5))
 (last-non-zero '(1 0 2 3 0 4 5))
 (last-non-zero '(1 2 3 4 5))
+|#
 
 
 ;Problem 2
@@ -35,13 +35,92 @@
 (define lex
   (λ (exp acc)
     (match exp
-      (`,y #:when (symbol? y)
+      [`,y #:when (symbol? y)
            (let ([idx (index y acc)])
              (cond
                ((symbol? idx) idx)
-               ((number? idx) `(var ,idx)))))
-      (`(lambda (,x) ,body)
+               ((number? idx) `(var ,idx))))]
+      [`(lambda (,x) ,body)
        #:when (symbol? x)
-       `(lambda ,(lex body (cons x acc))))
-      (`(,rator ,rand)
-       `(,(lex rator acc) ,(lex rand acc))))))
+       `(lambda ,(lex body (cons x acc)))]
+      [`(zero? ,nexp) `(zero ,(lex nexp acc))]
+      [`(* ,nexp1 ,nexp2) `(mult ,(lex nexp1 acc) ,(lex nexp2 acc))]
+      [`(catch ,k-name ,body) `(catch ,(lex body (cons k-name acc)))]
+      [`(pitch ,k-expr ,expr) `(pitch ,(lex k-expr acc) ,(lex expr acc))]
+      [`(,rator ,rand) `(app ,(lex rator acc) ,(lex rand acc))])))
+
+#|
+(lex '(lambda (x) x)'())
+(lex '(lambda (y) (lambda (x) y))'())
+(lex '(lambda (y) (lambda (x) (x y)))'())
+(lex '(lambda (x) (lambda (x) (x x)))'())
+(lex '(lambda (x) (lambda (x) (y x)))'())
+|#
+
+(lex (quote (pitch (lambda (x) (lambda (y) (* x x))) (lambda (x) x))) (quote ()))
+
+;Problem 3
+#;(define value-of-cps
+  (lambda (expr env k)
+    (match expr
+      (`(const ,expr) expr)
+      (`(mult ,x1 ,x2) (* (value-of x1 env) (value-of x2 env)))
+      (`(sub1 ,x) (sub1 (value-of x env)))
+      (`(zero ,x) (zero? (value-of x env)))
+      (`(if ,test ,conseq ,alt) (if (value-of test env)
+                                    (value-of conseq env)
+                                    (value-of alt env)))
+      (`(catch ,body) (let/cc k
+                        (value-of body (lambda (y) (if (zero? y) k (env (sub1 y)))))))
+      (`(pitch ,k-exp ,v-exp) ((value-of k-exp env) (value-of v-exp env)))
+      (`(let ,e ,body) (lambda (value-of body (lambda (y) (if (zero? y) a (env (sub1 y)))))))
+      (`(var ,y) (env y))
+      (`(lambda ,body) (lambda (a) (value-of body (lambda (y) (if (zero? y) a (env (sub1 y)))))))
+      (`(app ,rator ,rand) ((value-of rator env) (value-of rand env))))))
+ 
+(define empty-env
+  (lambda ()
+    (lambda (y)
+      (error 'value-of "unbound identifier"))))
+ 
+(define empty-k
+  (lambda ()
+    (lambda (v)
+      v)))
+
+
+
+;Test Cases
+#|
+(check-equal? (value-of-cps '(const 5) (empty-env) (empty-k)) 5)
+(check-equal? (value-of-cps '(mult (const 5) (const 5)) (empty-env) (empty-k)) 25)
+(check-equal? (value-of-cps '(sub1 (sub1 (const 5))) (empty-env) (empty-k)) 3)
+(check-equal? (value-of-cps '(if (zero (const 0)) (mult (const 2) (const 2)) (const 3)) (empty-env) (empty-k)) 4)
+(check-equal? (value-of-cps '(app (app (lambda (lambda (var 1))) (const 6)) (const 5)) (empty-env) (empty-k)) 6)
+(check-equal? (value-of-cps '(app (lambda (app (lambda (var 1)) (const 6))) (const 5)) (empty-env) (empty-k)) 5)
+(check-equal? (value-of-cps '(let (const 6) (const 4)) (empty-env) (empty-k)) 4)
+(check-equal? (value-of-cps '(let (const 5) (var 0)) (empty-env) (empty-k)) 5)
+(check-equal? (value-of-cps '(mult (const 5) (let (const 5) (var 0))) (empty-env) (empty-k)) 25)
+(check-equal? (value-of-cps '(app (if (zero (const 4)) (lambda (var 0)) (lambda (const 5))) (const 3)) (empty-env) (empty-k)) 5)
+(check-equal? (value-of-cps '(app (if (zero (const 0)) (lambda (var 0)) (lambda (const 5))) (const 3)) (empty-env) (empty-k)) 3)
+(check-equal? (value-of-cps '(catch (pitch (pitch (var 0) (const 5)) (const 6))) (empty-env) (empty-k)) 5)
+(check-equal? (value-of-cps '(catch (pitch (pitch (var 0) (const 5)) (const 5))) (empty-env) (empty-k)) 5)
+(check-equal? (value-of-cps '(mult (const 3) (catch (pitch (const 5) (pitch (var 0) (const 5))))) (empty-env) (empty-k)) 15)
+(check-equal? (value-of-cps '(if (zero (const 5)) (app (lambda (app (var 0) (var 0))) (lambda (app (var 0) (var 0)))) (const 4))
+                            (empty-env)
+                            (empty-k))
+              4)
+(check-equal? (value-of-cps '(if (zero (const 0)) (const 4) (app (lambda (app (var 0) (var 0))) (lambda (app (var 0) (var 0)))))
+                            (empty-env)
+                            (empty-k))
+              4)
+(check-equal? (value-of-cps '(app (lambda (app (app (var 0) (var 0)) (const 2)))
+                                  (lambda
+                                      (lambda
+                                          (if (zero (var 0))
+                                              (const 1)
+                                              (app (app (var 1) (var 1)) (sub1 (var 0)))))))
+                            (empty-env)
+                            (empty-k))
+              1)
+|#
