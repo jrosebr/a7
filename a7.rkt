@@ -57,10 +57,9 @@
 (lex '(lambda (x) (lambda (x) (y x)))'())
 |#
 
-(lex (quote (pitch (lambda (x) (lambda (y) (* x x))) (lambda (x) x))) (quote ()))
 
 ;Problem 3
-#;(define value-of-cps
+(define value-of-cps
   (lambda (expr env k)
     (match expr
       (`(const ,expr) expr)
