@@ -1,5 +1,4 @@
 #lang racket
-(require rackunit)
 ;Problem 1
 (define last-non-zero
   (lambda (ls)
@@ -58,29 +57,43 @@
 |#
 
 
+(require rackunit)
+
 ;Problem 3
 (define value-of-cps
   (lambda (expr env k)
     (match expr
       (`(const ,expr) expr)
-      (`(mult ,x1 ,x2) (* (value-of x1 env) (value-of x2 env)))
-      (`(sub1 ,x) (sub1 (value-of x env)))
-      (`(zero ,x) (zero? (value-of x env)))
-      (`(if ,test ,conseq ,alt) (if (value-of test env)
-                                    (value-of conseq env)
-                                    (value-of alt env)))
+      (`(mult ,x1 ,x2) (* (value-of-cps x1 env) (value-of-cps x2 env)))
+      (`(sub1 ,x) (sub1 (value-of-cps x env)))
+      (`(zero ,x) (zero? (value-of-cps x env)))
+      (`(if ,test ,conseq ,alt) (if (value-of-cps test env)
+                                    (value-of-cps conseq env)
+                                    (value-of-cps alt env)))
       (`(catch ,body) (let/cc k
-                        (value-of body (lambda (y) (if (zero? y) k (env (sub1 y)))))))
-      (`(pitch ,k-exp ,v-exp) ((value-of k-exp env) (value-of v-exp env)))
-      (`(let ,e ,body) (lambda (value-of body (lambda (y) (if (zero? y) a (env (sub1 y)))))))
+                        (value-of-cps body (lambda (y) (if (zero? y) k (env (sub1 y)))))))
+      (`(pitch ,k-exp ,v-exp) ((value-of-cps k-exp env) (value-of-cps v-exp env)))
+      (`(let ,e ,body) (lambda (a) (value-of-cps body (lambda (y) (if (zero? y) a (env (sub1 y)))) k)))
       (`(var ,y) (env y))
-      (`(lambda ,body) (lambda (a) (value-of body (lambda (y) (if (zero? y) a (env (sub1 y)))))))
-      (`(app ,rator ,rand) ((value-of rator env) (value-of rand env))))))
+      (`(lambda ,body) (lambda (a) (value-of-cps body (lambda (y) (if (zero? y) a (env (sub1 y)))))))
+      (`(app ,rator ,rand) ((value-of-cps rator env) (value-of-cps rand env))))))
  
 (define empty-env
   (lambda ()
     (lambda (y)
-      (error 'value-of "unbound identifier"))))
+      (error 'value-of-cps "unbound identifier"))))
+
+(define apply-env
+  (λ (env y k)
+    (k (env y))))
+
+;???
+(define apply-closure
+  (λ (rator rand env)
+    ((value-of-cps rator env k) (value-of-cps rand env k))))
+
+(define apply-k
+  (
  
 (define empty-k
   (lambda ()
