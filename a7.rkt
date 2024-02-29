@@ -63,21 +63,27 @@
 (define value-of-cps
   (lambda (expr env k)
     (match expr
-      (`(const ,expr) k expr)
+      (`(const ,n) (apply-k k n))
       (`(mult ,x1 ,x2) (* (value-of-cps x1 env k) (value-of-cps x2 env k)))
       (`(sub1 ,x) (sub1 (value-of-cps x env k)))
       (`(zero ,x) (zero? (value-of-cps x env k)))
-      (`(if ,test ,conseq ,alt) (if (value-of-cps test env k)
-                                    (value-of-cps conseq env k)
-                                    (value-of-cps alt env k)))
-      (`(catch ,body) (let/cc k
-                        (value-of-cps body (lambda (y) (if (zero? y) k (env (sub1 y)))) k)))
-      (`(pitch ,k-exp ,v-exp) ((value-of-cps k-exp env k) (value-of-cps v-exp env k)))
-      (`(let ,e ,body) (lambda (a) (value-of-cps e body (lambda (y) (if (zero? y) e (env (sub1 y)))))))
-      (`(var ,y) (env y))
-      (`(lambda ,body) (lambda (a) (value-of-cps body (lambda (y) (if (zero? y) a (env (sub1 y)))) k)))
-      (`(app ,rator ,rand) ((value-of-cps rator env k) (value-of-cps rand env k))))))
-
+      (`(if ,test ,conseq ,alt) (value-of-cps test env (lambda (v)
+                                                         (if v
+                                                             (value-of-cps conseq env k)
+                                                             (value-of-cps alt env k)))))
+      (`(catch ,body) 
+       (value-of-cps body (lambda (y k^) (if (zero? y) (apply-k k^ k) (apply-env env (sub1 y)))) k))
+      (`(pitch ,k-exp ,v-exp) (value-of-cps k-exp env (lambda (k^)
+                                                        (value-of-cps v-exp env (lambda (v)
+                                                                                  (k^ v))))))
+      (`(let ,e ,body) (value-of-cps e env (lambda (a)
+                                             (value-of-cps body (lambda (y k^) (if (zero? y) (apply-k k^ a) (apply-env env (sub1 y) k^))) k))))
+      (`(var ,y) (apply-env env y k))
+      (`(lambda ,body) (apply-k k (lambda (a k^)
+                                    (value-of-cps body (lambda (y k^^) (if (zero? y) (apply-k k^^ a) (apply-env env (sub1 y) k^^))) k^))))
+      (`(app ,rator ,rand) (value-of-cps rator env (lambda (f)
+                                                     (value-of-cps rand env (lambda (w)
+                                                                              (f w k)))))))))
  
 (define empty-env
   (lambda ()
