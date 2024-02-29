@@ -94,7 +94,6 @@
   (λ (env y k)
     (k (env y))))
 
-;???
 (define apply-closure
   (λ (clos arg k)
     (clos arg k)))
