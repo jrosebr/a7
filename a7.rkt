@@ -63,20 +63,21 @@
 (define value-of-cps
   (lambda (expr env k)
     (match expr
-      (`(const ,expr) expr)
-      (`(mult ,x1 ,x2) (* (value-of-cps x1 env) (value-of-cps x2 env)))
-      (`(sub1 ,x) (sub1 (value-of-cps x env)))
-      (`(zero ,x) (zero? (value-of-cps x env)))
-      (`(if ,test ,conseq ,alt) (if (value-of-cps test env)
-                                    (value-of-cps conseq env)
-                                    (value-of-cps alt env)))
+      (`(const ,expr) k expr)
+      (`(mult ,x1 ,x2) (* (value-of-cps x1 env k) (value-of-cps x2 env k)))
+      (`(sub1 ,x) (sub1 (value-of-cps x env k)))
+      (`(zero ,x) (zero? (value-of-cps x env k)))
+      (`(if ,test ,conseq ,alt) (if (value-of-cps test env k)
+                                    (value-of-cps conseq env k)
+                                    (value-of-cps alt env k)))
       (`(catch ,body) (let/cc k
-                        (value-of-cps body (lambda (y) (if (zero? y) k (env (sub1 y)))))))
-      (`(pitch ,k-exp ,v-exp) ((value-of-cps k-exp env) (value-of-cps v-exp env)))
-      (`(let ,e ,body) (lambda (a) (value-of-cps body (lambda (y) (if (zero? y) a (env (sub1 y)))) k)))
+                        (value-of-cps body (lambda (y) (if (zero? y) k (env (sub1 y)))) k)))
+      (`(pitch ,k-exp ,v-exp) ((value-of-cps k-exp env k) (value-of-cps v-exp env k)))
+      (`(let ,e ,body) (lambda (a) (value-of-cps e body (lambda (y) (if (zero? y) e (env (sub1 y)))))))
       (`(var ,y) (env y))
-      (`(lambda ,body) (lambda (a) (value-of-cps body (lambda (y) (if (zero? y) a (env (sub1 y)))))))
-      (`(app ,rator ,rand) ((value-of-cps rator env) (value-of-cps rand env))))))
+      (`(lambda ,body) (lambda (a) (value-of-cps body (lambda (y) (if (zero? y) a (env (sub1 y)))) k)))
+      (`(app ,rator ,rand) ((value-of-cps rator env k) (value-of-cps rand env k))))))
+
  
 (define empty-env
   (lambda ()
@@ -89,11 +90,13 @@
 
 ;???
 (define apply-closure
-  (λ (rator rand env)
-    ((value-of-cps rator env k) (value-of-cps rand env k))))
+  (λ (clos arg k)
+    (clos arg k)))
 
 (define apply-k
-  (
+  (λ (k v)
+    (k v)))
+
  
 (define empty-k
   (lambda ()
