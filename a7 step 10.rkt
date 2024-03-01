@@ -6,18 +6,28 @@
   (lambda (expr env k)
     (match expr
       (`(const ,n) (apply-k k n))
+      
       (`(mult ,x1 ,x2) 
        (value-of-cps x1 env (make-mult-k-1 x2 env k)))
+      
       (`(sub1 ,x) (value-of-cps x env (make-sub1-k x k)))
+      
       (`(zero ,x) (value-of-cps x env (make-zero-k x k)))
+      
       (`(if ,test ,conseq ,alt) (value-of-cps test env (make-if-k test conseq alt env k)))
+      
       (`(catch ,body) 
        (value-of-cps body (extend-env k env) k))
+      
       (`(pitch ,k-exp ,v-exp) (value-of-cps k-exp env (make-pitch-k v-exp env)))
+      
       (`(let ,e ,body) (value-of-cps e env (make-let-k body env k)))
+      
       (`(var ,y) (apply-env env y k))
+      
       (`(lambda ,body)
        (apply-k k (make-closure k body env)))
+      
       (`(app ,rator ,rand) (value-of-cps rator env (make-app-k rand env k))))))
 
 (define empty-env
@@ -48,66 +58,69 @@
   (lambda (x body env)
     `(make-closure (λ (,x) ,body) ,env)))
 
+;Continuation Constructors
 (define make-mult-k-1
   (lambda (x2^ env^ k^)
-    (lambda (v)
-      (value-of-cps x2^ env^ (make-mult-k-2 v k^)))))
+    `(make-mult-k-1 ,x2^ ,env^ ,k^)))
 
 (define make-mult-k-2
   (lambda (v^ k^)
-    (lambda (v) (apply-k k^ (* v^ v)))))
+    `(make-mult-k-2 ,v^ ,k^)))
 
 (define make-sub1-k
-  (lambda(v k)
-    (lambda (v)
-      (apply-k k (sub1 v)))))
+  (lambda(v^ k^)
+    `(make-sub1-k ,v^ ,k^)))
 
 (define make-zero-k
-  (lambda (v k)
-    (lambda (v)
-      (apply-k k (zero? v)))))
+  (lambda (v^ k^)
+    `(make-zero-k ,v^ ,k^)))
 
 (define make-if-k
-  (lambda (v conseq alt env k)
-    (lambda (v)
-      (if v
-          (value-of-cps conseq env k)
-          (value-of-cps alt env k)))))
+  (lambda (v^ conseq^ alt^ env^ k^)
+    `(make-if-k ,v^ ,conseq^ ,alt^ ,env^ ,k^)))
 
 (define make-pitch-k
-  (lambda (v-exp env)
-    (lambda (k^)
-      (value-of-cps v-exp env (make-pitch-k^ k^)))))
+  (lambda (v-exp^ env^)
+    `(make-pitch-k ,v-exp^ ,env^)))
 
 (define make-pitch-k^
-  (lambda (k^)
-    (lambda (v)
-      (apply-k k^ v))))
+  (lambda (k^^)
+    `(make-pitch-k^ ,k^^)))
 
 (define make-let-k
-  (lambda (body env k)
-    (lambda (a)
-      (value-of-cps body (extend-env a env) k))))
+  (lambda (body^ env^ k^)
+    `(make-let-k ,body^ ,env^ ,k^)))
 
 (define make-app-k
-  (lambda (rand env k)
-    (lambda (f)
-      (value-of-cps rand env (make-app-k-2 f k)))))
+  (lambda (rand^ env^ k^)
+    `(make-app-k ,rand^ ,env^ ,k^)))
 
 (define make-app-k-2
-  (lambda (f k)
-    (lambda (w)
-      (apply-closure f w k))))
+  (lambda (f^ k^)
+    `(make-app-k-2 ,f^ ,k^)))
 
 (define apply-k
   (λ (k v)
-    (k v)))
+    (match k
+      [`(empty-k) v]
+      [`(make-mult-k-1 ,x2^ ,env^ ,k^) (value-of-cps x2^ env^ (make-mult-k-2 v k^))]
+      [`(make-mult-k-2 ,v^ ,k^) (apply-k k^ (* v^ v))]
+      [`(make-sub1-k ,v^ ,k^) (apply-k k^ (sub1 v))]
+      [`(make-zero-k ,v^ ,k^) (apply-k k^ (zero? v))]
+      [`(make-if-k ,v^ ,conseq^ ,alt^ ,env^ ,k^)
+       (if v
+          (value-of-cps conseq^ env^ k^)
+          (value-of-cps alt^ env^ k^))]
 
- 
+      [`(make-pitch-k ,v-exp^ ,env^) (value-of-cps v-exp^ env^ (make-pitch-k^ v))]
+      [`(make-pitch-k^ ,k^^) (apply-k k^^ v)]
+      [`(make-let-k ,body^ ,env^ ,k^) (value-of-cps body^ (extend-env v env^) k^)]
+      [`(make-app-k ,rand^ ,env^ ,k^) (value-of-cps rand^ env^ (make-app-k-2 v k^))]
+      [`(make-app-k-2 ,f^ ,k^) (apply-closure f^ v k^)])))
+
 (define empty-k
   (lambda ()
-    (lambda (v)
-      v)))
+    `(empty-k)))
 
 
 

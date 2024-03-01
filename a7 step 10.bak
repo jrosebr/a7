@@ -49,13 +49,13 @@
     `(make-closure (λ (,x) ,body) ,env)))
 
 (define make-mult-k-1
-  (lambda (x2^ env^ k^)
+  (lambda (x2 env k)
     (lambda (v)
-      (value-of-cps x2^ env^ (make-mult-k-2 v k^)))))
+      (value-of-cps x2 env (make-mult-k-2 v k)))))
 
 (define make-mult-k-2
-  (lambda (v^ k^)
-    (lambda (v) (apply-k k^ (* v^ v)))))
+  (lambda (v k)
+    (lambda (w) (apply-k k (* v w)))))
 
 (define make-sub1-k
   (lambda(v k)
