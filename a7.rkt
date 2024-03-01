@@ -66,45 +66,55 @@
       (`(const ,n) (apply-k k n))
       (`(mult ,x1 ,x2) (* (value-of-cps x1 env k) (value-of-cps x2 env k)))
       (`(sub1 ,x) (value-of-cps x env (lambda (v)
-                                        (sub1 v))))
-      (`(zero ,x) (zero? (value-of-cps x env k)))
+                                        (apply-k k (sub1 v)))))
+      (`(zero ,x) (value-of-cps x env (lambda (v)
+                                        (apply-k k (zero? v)))))
       (`(if ,test ,conseq ,alt) (value-of-cps test env (lambda (v)
                                                          (if v
                                                              (value-of-cps conseq env k)
                                                              (value-of-cps alt env k)))))
       (`(catch ,body) 
-       (value-of-cps body (lambda (y k^) (if (zero? y) (apply-k k^ k) (apply-env env (sub1 y) k^))) k))
+       (value-of-cps body (extend-env k env) k))
       (`(pitch ,k-exp ,v-exp) (value-of-cps k-exp env (lambda (k^)
                                                         (value-of-cps v-exp env (lambda (v)
                                                                                   (apply-k k^ v))))))
       (`(let ,e ,body) (value-of-cps e env (lambda (a)
-                                             (value-of-cps body (lambda (y k^) (if (zero? y) (apply-k k^ a) (apply-env env (sub1 y) k^))) k))))
+                                             (value-of-cps body (extend-env a env) k))))
       (`(var ,y) (apply-env env y k))
-      (`(lambda ,body) (apply-k k (lambda (a k^)
-                                    (value-of-cps body (lambda (y k^^) (if (zero? y) (apply-k k^^ a) (apply-env env (sub1 y) k^^))) k^))))
+      (`(lambda ,body)
+       (apply-k k (make-closure k body env)))
       (`(app ,rator ,rand) (value-of-cps rator env (lambda (f)
                                                      (value-of-cps rand env (lambda (w)
                                                                               (apply-closure f w k)))))))))
- 
+
 (define empty-env
   (lambda ()
-    (lambda (y)
-      (error 'value-of-cps "unbound identifier"))))
+    `(empty-env)))
 
-#;(define extend-env
-  (λ (x arg env k)
-    (λ (y)
-      (cond
-        ((eqv? y x) arg)
-        (else (apply-env env y k))))))
+(define extend-env
+  (lambda (a env-cps)
+    `(extend-env ,a ,env-cps)))
+
 
 (define apply-env
   (λ (env y k)
-    (k (env y))))
+    (match env
+      (`(empty-env) (error 'val-of "unbound ~a" y))
+      (`(extend-env ,a ,env)
+       (cond
+         ((zero? y) (apply-k k a))
+         (else (apply-env env (sub1 y) k)))))))
+
 
 (define apply-closure
-  (λ (clos arg k)
-    (clos arg k)))
+  (λ (clos-cps a k)
+    (match clos-cps
+      (`(make-closure (λ (,x) ,body) ,env)
+       (value-of-cps body (extend-env a env) k)))))
+
+(define make-closure
+  (λ (x body env)
+    `(make-closure (λ (,x) ,body) ,env)))
 
 (define apply-k
   (λ (k v)
@@ -121,7 +131,6 @@
 ;Test Cases
 
 (check-equal? (value-of-cps '(const 5) (empty-env) (empty-k)) 5)
-#|
 (check-equal? (value-of-cps '(mult (const 5) (const 5)) (empty-env) (empty-k)) 25)
 (check-equal? (value-of-cps '(sub1 (sub1 (const 5))) (empty-env) (empty-k)) 3)
 (check-equal? (value-of-cps '(if (zero (const 0)) (mult (const 2) (const 2)) (const 3)) (empty-env) (empty-k)) 4)
@@ -152,4 +161,3 @@
                             (empty-env)
                             (empty-k))
               1)
-|#
