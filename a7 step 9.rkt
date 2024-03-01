@@ -6,30 +6,28 @@
   (lambda (expr env k)
     (match expr
       (`(const ,n) (apply-k k n))
-      (`(mult ,x1 ,x2) (value-of-cps x1 env (make-cont k (lambda (v)
-                                              (value-of-cps x2 env (extend-cont k (lambda (w)
-                                                                     (apply-k k (* v w)))))))))
-      (`(sub1 ,x) (value-of-cps x env (make-cont k (lambda (v)
-                                        (apply-k k (sub1 v))))))
-      (`(zero ,x) (value-of-cps x env (make-cont k (lambda (v)
-                                        (apply-k k (zero? v))))))
-      (`(if ,test ,conseq ,alt) (value-of-cps test env (make-cont k (lambda (v)
+      (`(mult ,x1 ,x2) 
+       (value-of-cps x1 env (lambda (v)
+                              (value-of-cps x2 env (make-mult-k v k)))))
+      (`(sub1 ,x) (value-of-cps x env (make-sub1-k x k)))
+      (`(zero ,x) (value-of-cps x env (make-zero-k x k)))
+      (`(if ,test ,conseq ,alt) (value-of-cps test env (lambda (v)
                                                          (if v
                                                              (value-of-cps conseq env k)
-                                                             (value-of-cps alt env k))))))
+                                                             (value-of-cps alt env k)))))
       (`(catch ,body) 
        (value-of-cps body (extend-env k env) k))
-      (`(pitch ,k-exp ,v-exp) (value-of-cps k-exp env (make-cont k (lambda (k^)
+      (`(pitch ,k-exp ,v-exp) (value-of-cps k-exp env (lambda (k^)
                                                         (value-of-cps v-exp env (lambda (v)
-                                                                                  (apply-k k^ v)))))))
-      (`(let ,e ,body) (value-of-cps e env (make-cont k (lambda (a)
-                                             (value-of-cps body (extend-env a env) k)))))
+                                                                                  (apply-k k^ v))))))
+      (`(let ,e ,body) (value-of-cps e env (lambda (a)
+                                             (value-of-cps body (extend-env a env) k))))
       (`(var ,y) (apply-env env y k))
       (`(lambda ,body)
        (apply-k k (make-closure k body env)))
-      (`(app ,rator ,rand) (value-of-cps rator env (make-cont k (lambda (f)
+      (`(app ,rator ,rand) (value-of-cps rator env (lambda (f)
                                                      (value-of-cps rand env (lambda (w)
-                                                                              (apply-closure f w k))))))))))
+                                                                              (apply-closure f w k)))))))))
 
 (define empty-env
   (lambda ()
@@ -38,7 +36,6 @@
 (define extend-env
   (lambda (a env-cps)
     `(extend-env ,a ,env-cps)))
-
 
 (define apply-env
   (lambda (env y k)
@@ -60,26 +57,38 @@
   (lambda (x body env)
     `(make-closure (λ (,x) ,body) ,env)))
 
-(define make-cont
-  (lambda (k^ body)
-    `(continuation ,k^ ,body)))
 
 (define make-mult-k
   (lambda (v k)
     (lambda (w) (apply-k k (* v w)))))
 
+(define make-sub1-k
+  (lambda(v k)
+    (lambda (v)
+      (apply-k k (sub1 v)))))
+
+(define make-zero-k
+  (lambda (v k)
+    (lambda (v)
+      (apply-k k (zero? v)))))
+
+#;(define make-if-k
+  (lambda (v conseq alt)
+    (lambda (v)
+      (if v
+          (value-of-cps conseq env k)
+          (value-of-cps alt env k)))))
+
 
 (define apply-k
-  (lambda (k v)
-    (match k
-      (`(empty-k) v)
-      (`(continuation ,k^ ,body) (apply-k k^ v))
-      (`(extend-continuation ,k^ ,k^^ ,body) (apply-k k^ (apply-k k^^ v))))))
+  (λ (k v)
+    (k v)))
 
  
 (define empty-k
   (lambda ()
-    `(empty-k)))
+    (lambda (v)
+      v)))
 
 
 
